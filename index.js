@@ -6,6 +6,7 @@ const token = '8119024819:AAGruoDbkG0fV5jBw7c3z9bV2TdS2b44G6c';
 
 // Create a bot that uses 'polling' to fetch new updates
 const bot = new TelegramBot(token, { polling: true });
+const { DateTime } = require('luxon')
 const reddit = require('./controller/lib/reddit');
 
 bot.setMyCommands([
@@ -60,8 +61,87 @@ bot.onText(/\/scrape (\S+)(?:\s+(week|month|year|all))?/, async (msg, match) => 
     }
 });
 
-bot.onText(/\/analyse (.+)/, (msg, match) => {
-    bot.sendMessage(msg.chat.id,"You analyzed" );
+bot.onText(/\/analyse (\S+)(?:\s+(week|month|year|all))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const redditUsername = match[1]?.trim(); // Get the Reddit username from the command
+    const scope = match[2]; // Default to 'week' if no scope is provided
+
+    // Validate the scope to ensure it's one of the allowed options
+    const validScopes = ['week', 'month', 'year', 'all'];
+    if (!validScopes.includes(scope)) {
+        return bot.sendMessage(chatId, 'Invalid date scope. Please use "week", "month", "year", or "all".');
+    }
+
+    // Check if the username is provided
+    if (!redditUsername) {
+        return bot.sendMessage(chatId, 'You must set a Reddit account name to analyze. Please use the format: /analyse <username> [scope]');
+    }
+
+    try {
+        // Try to fetch the Reddit user
+        const user = await reddit.getUser(redditUsername).fetch();
+        // Fetch user submissions and comments based on the scope
+        let submissions, comments;
+        const now = DateTime.utc();
+        let cutoffDate;
+
+        // Calculate the cutoff date based on the scope
+        switch (scope) {
+            case 'week':
+                cutoffDate = now.minus({ weeks: 1 });
+                break;
+            case 'month':
+                cutoffDate = now.minus({ months: 1 });
+                break;
+            case 'year':
+                cutoffDate = now.minus({ years: 1 });
+                break;
+            case 'all':
+                cutoffDate = DateTime.fromMillis(0); // No cutoff date, all time
+                break;
+            default:
+                cutoffDate = now.minus({ weeks: 1 });  // Default to week if invalid scope
+                break;
+        }
+
+        // Fetch submissions and comments for the user
+        submissions = await reddit.getUser(redditUsername).getSubmissions();
+        comments = await reddit.getUser(redditUsername).getComments();
+
+        // Filter submissions and comments by the cutoff date
+        submissions = submissions.filter(submission => DateTime.fromSeconds(submission.created_utc) >= cutoffDate);
+        comments = comments.filter(comment => DateTime.fromSeconds(comment.created_utc) >= cutoffDate);
+
+        // Calculate the total number of comments, upvotes, and views
+        const totalComments = comments.length;
+        const totalUpvotes = [...submissions, ...comments].reduce((sum, item) => sum + item.ups, 0);
+        const totalFollowers = user.subscribers; // User followers count
+        const topPosts = submissions.sort((a, b) => b.ups - a.ups).slice(0, 5); // Top 5 posts based on upvotes
+
+        // Format top posts
+        const topPostsText = topPosts
+            .map((post, index) => `${index + 1}. [${post.title}](https://www.reddit.com${post.permalink}) - ${post.ups} upvotes`)
+            .join('\n');
+
+        // Construct the stats message
+        let statsMessage = `**Stats for Reddit User: ${redditUsername} (Last ${scope})**\n\n`;
+        statsMessage += `- Total Comments: ${totalComments}\n`;
+        statsMessage += `- Total Upvotes: ${totalUpvotes}\n`;
+        statsMessage += `- Total Followers: ${totalFollowers}\n`;
+        statsMessage += `- **Top 5 Posts**:\n${topPostsText || "No posts in this time period."}`;
+
+        // Send stats message to the Telegram user
+        bot.sendMessage(chatId, statsMessage, { parse_mode: 'Markdown' });
+
+    } catch (error) {
+        // If an error occurs, assume the user does not exist
+        if (error.statusCode === 404) {
+            bot.sendMessage(chatId, `The Reddit account "${redditUsername}" does not exist.`);
+        } else {
+            console.error('Error:', error);
+            bot.sendMessage(chatId, `An error occurred while analyzing the account "${redditUsername}".`);
+        }
+    }
 });
 
 // Listen for any kind of message and respond with the same message
