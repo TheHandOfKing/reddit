@@ -64,7 +64,7 @@ bot.onText(/\/scrape (\S+)(?:\s+(week|month|year|all))?/, async (msg, match) => 
 bot.onText(/\/analyse (\S+)(?:\s+(week|month|year|all))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const redditUsername = match[1]?.trim(); // Get the Reddit username from the command
-    const scope = match[2]; // Default to 'week' if no scope is provided
+    const scope = match[2] || 'week'; // Default to 'week' if no scope is provided
 
     // Validate the scope to ensure it's one of the allowed options
     const validScopes = ['week', 'month', 'year', 'all'];
@@ -80,6 +80,7 @@ bot.onText(/\/analyse (\S+)(?:\s+(week|month|year|all))?/, async (msg, match) =>
     try {
         // Try to fetch the Reddit user
         const user = await reddit.getUser(redditUsername).fetch();
+
         // Fetch user submissions and comments based on the scope
         let submissions, comments;
         const now = DateTime.utc();
@@ -112,21 +113,44 @@ bot.onText(/\/analyse (\S+)(?:\s+(week|month|year|all))?/, async (msg, match) =>
         submissions = submissions.filter(submission => DateTime.fromSeconds(submission.created_utc) >= cutoffDate);
         comments = comments.filter(comment => DateTime.fromSeconds(comment.created_utc) >= cutoffDate);
 
-        // Calculate the total number of comments, upvotes, and views
-        const totalComments = comments.length;
-        const totalUpvotes = [...submissions, ...comments].reduce((sum, item) => sum + item.ups, 0);
-        const totalFollowers = user.subscribers; // User followers count
-        const topPosts = submissions.sort((a, b) => b.ups - a.ups).slice(0, 5); // Top 5 posts based on upvotes
+        // Calculate the total number of comments received on user's submissions
+        let totalReceivedComments = 0;
+        let totalViews = 0;
+        let totalUpvotes = 0;
+        let totalFollowers = user.subscribers; // User followers count
+        let topPosts = [];
 
-        // Format top posts
+        // Process each submission to get views and received comments
+        for (let submission of submissions) {
+            console.log(submission);
+            
+            // Add views for each submission (if available)
+            totalViews += submission.view_count || 0; // Fallback to 0 if no view count available
+
+            // Add upvotes for each submission
+            totalUpvotes += submission.ups;
+
+            // Fetch comments for this submission
+            const submissionComments = submission.num_comments;
+
+            // Count how many comments this user has received (filtering by submission author)
+            totalReceivedComments += submissionComments;
+
+        }
+
+        // Sort the submissions by upvotes and get the top 5 posts
+        topPosts = submissions.sort((a, b) => b.ups - a.ups).slice(0, 5);
+
+        // Format the top posts text
         const topPostsText = topPosts
-            .map((post, index) => `${index + 1}. [${post.title}](https://www.reddit.com${post.permalink}) - ${post.ups} upvotes`)
+            .map((post, index) => `${index + 1}. [${post.title}](https://www.reddit.com${post.permalink}) - ${post.ups} upvotes, ${post.view_count || 0} views`)
             .join('\n');
 
         // Construct the stats message
         let statsMessage = `**Stats for Reddit User: ${redditUsername} (Last ${scope})**\n\n`;
-        statsMessage += `- Total Comments: ${totalComments}\n`;
+        statsMessage += `- Total Comments Received: ${totalReceivedComments}\n`;
         statsMessage += `- Total Upvotes: ${totalUpvotes}\n`;
+        statsMessage += `- Total Views: ${totalViews}\n`;
         statsMessage += `- Total Followers: ${totalFollowers}\n`;
         statsMessage += `- **Top 5 Posts**:\n${topPostsText || "No posts in this time period."}`;
 
@@ -143,6 +167,7 @@ bot.onText(/\/analyse (\S+)(?:\s+(week|month|year|all))?/, async (msg, match) =>
         }
     }
 });
+
 
 // Listen for any kind of message and respond with the same message
 bot.on('message', (msg) => {
