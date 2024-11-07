@@ -4,7 +4,7 @@
   "description": "A bot for reddit courtesy by Whoknowswonder",
   "main": "index.js",
   "scripts": {
-    "start": "node index"
+    "start": "nodemon index"
   },
   "author": "Me",
   "license": "ISC",
@@ -12,6 +12,7 @@
     "axios": "^1.7.7",
     "express": "^4.21.1",
     "node-telegram-bot-api": "^0.66.0",
+    "nodemon": "^3.1.7",
     "snoowrap": "^1.23.0"
   }
 }

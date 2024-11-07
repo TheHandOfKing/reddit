@@ -16,25 +16,45 @@ bot.setMyCommands([
     console.log('Commands have been set up');
 }).catch(console.error);
 
-bot.onText(/\/scrape (.+)/, async (msg, match) => {
+bot.onText(/\/scrape (\S+)(?:\s+(week|month|year|all))?/, async (msg, match) => {
     const chatId = msg.chat.id;
-    const redditUsername = match[1].trim(); // Get the Reddit username from the command
+    const redditUsername = match[1]?.trim(); // Get the Reddit username from the command
+    const scope = match[2]; // Default to 'week' if scope is not provided
+
+    // Validate the scope to ensure it's one of the allowed options
+    const validScopes = ['week', 'month', 'year', 'all'];
+    
+    if (!validScopes.includes(scope)) {
+        return bot.sendMessage(chatId, 'Invalid date scope. Please use "week", "month", or "year".');
+    }
+
+    // Check if the username is provided
+    if (!redditUsername) {
+        return bot.sendMessage(chatId, 'You must set a Reddit account name to scrape. Please use the format: /scrape <username> [scope]');
+    }
 
     try {
-        // Try to fetch the Reddit user
-        const user = await reddit.getUser(redditUsername).fetch();
-        console.log(user);
-        // If we successfully get the user, send a success message
-        bot.sendMessage(chatId, `The Reddit account "${redditUsername}" exists!`);
-        
-        // Further scraping or handling code can go here
+        // Fetch user submissions based on the scope
+        const submissions = await reddit.getUser(redditUsername).getSubmissions({ time: scope });
+
+        // Extract subreddits from the submissions
+        const subreddits = submissions
+            .map(submission => submission.subreddit.display_name)
+            .filter((value, index, self) => self.indexOf(value) === index);  // Remove duplicates
+
+        if (subreddits.length > 0) {
+            // Send the list of subreddits to Telegram
+            bot.sendMessage(chatId, `The Reddit account "${redditUsername}" has posted in the following subreddits in the last ${scope}:\n\n${subreddits.join('\n')}`);
+        } else {
+            bot.sendMessage(chatId, `The Reddit account "${redditUsername}" has not posted in any subreddits in the last ${scope}.`);
+        }
 
     } catch (error) {
         // If an error occurs, assume the user does not exist
         if (error.statusCode === 404) {
             bot.sendMessage(chatId, `The Reddit account "${redditUsername}" does not exist.`);
         } else {
-            console.error('Authentication error:', error);
+            console.error('Error:', error);
             bot.sendMessage(chatId, `An error occurred while searching for the account "${redditUsername}".`);
         }
     }

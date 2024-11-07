@@ -2,17 +2,9 @@ const snoowrap = require('snoowrap');
 
 const reddit = new snoowrap({
     userAgent: 'EraBot',
-    clientId: 'De6063ydR4oVUYDR4uCL9Q',
-    clientSecret: 'bLLLG5qrSCNroCHY2HCBYtAkyiUiSA',
-    username: 'Danksta12',
-    password: 'fuLgrado12'
-});
-
-// Test authentication
-reddit.getMe().then(user => {
-    console.log('Authenticated as:', user);
-}).catch(error => {
-    console.error('Authentication error:', error);
+    clientId: '40Uvb312eV3yvdEYBLAvlQ',
+    clientSecret: 'tFctPNvK8-jRAucqH_ku_AW84DeMmQ',
+    refreshToken: '21530544613-bkx0Y23B8xhPbIH7N0j7uASRoP-ing'
 });
 
 module.exports = reddit;
