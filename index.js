@@ -15,11 +15,33 @@ const reddit = require('./controller/lib/reddit');
 const logNames = (redditUsername, scope, command, msg) => {
     const logMessage = `Reddit Username: ${redditUsername}, Scope: ${scope}, Command: ${command}, User: ${msg.from.username}, User First Name: ${msg.from.first_name}, Date: ${new Date().toISOString()}\n`;
     const logFilePath = path.join(__dirname, 'reddit_commands.log');
-    
-    fs.appendFile(logFilePath, logMessage, (err) => {
+
+    // Read the log file first
+    fs.readFile(logFilePath, 'utf8', (err, data) => {
         if (err) {
-            console.error('Error writing to log file:', err);
+            if (err.code === 'ENOENT') {
+                // Log file doesn't exist yet, so we create it
+                console.log('Log file does not exist, creating a new one.');
+            } else {
+                console.error('Error reading the log file:', err);
+                return;
+            }
         }
+
+        // Check if the Reddit username already exists in the log
+        if (data && data.includes(`Reddit Username: ${redditUsername}`)) {
+            console.log(`The Reddit username "${redditUsername}" is already logged.`);
+            return;
+        }
+
+        // If the username is not found, append the new log message
+        fs.appendFile(logFilePath, logMessage, (err) => {
+            if (err) {
+                console.error('Error writing to log file:', err);
+            } else {
+                console.log(`Logged new Reddit username: ${redditUsername}`);
+            }
+        });
     });
 };
 
